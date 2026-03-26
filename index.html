@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torn RW Recon</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --text: #e0e0e0;
+    --text-muted: #888;
+    --border: #2a2a4a;
+    --green: #4caf50;
+    --green-bg: #1b3a1b;
+    --yellow: #ffc107;
+    --yellow-bg: #3a3520;
+    --red: #ef5350;
+    --red-bg: #3a1b1b;
+    --gray: #666;
+    --gray-bg: #2a2a2a;
+    --blue: #42a5f5;
+    --accent: #e94560;
+    --you-bg: #2a1a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .config-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .config-overlay.hidden { display: none; }
+  .config-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 32px; width: 400px; max-width: 90vw; }
+  .config-box h2 { color: var(--accent); margin-bottom: 20px; }
+  .config-box label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; margin-top: 12px; }
+  .config-box input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 4px; font-size: 14px; }
+  .config-box input:focus { outline: none; border-color: var(--accent); }
+  .config-box button { width: 100%; margin-top: 20px; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .config-box button:hover { background: #ff6b81; }
+  .config-box .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .header { background: var(--bg2); border-bottom: 2px solid var(--accent); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .header h1 { font-size: 20px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+  .header h1 span { color: var(--text); font-weight: 400; font-size: 16px; }
+  .header-stats { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); }
+  .header-stats .val { color: var(--text); font-weight: 600; }
+  .header-right { display: flex; gap: 12px; align-items: center; }
+  .btn-small { background: var(--bg3); color: var(--text); border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-small:hover { border-color: var(--accent); }
+  .btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+  .btn-small.loading .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-container { background: var(--bg2); padding: 8px 24px 12px; display: none; }
+  .progress-container.active { display: block; }
+  .progress-bar-outer { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+  .progress-bar-inner { background: var(--accent); height: 100%; width: 0%; transition: width 0.3s; }
+  .progress-text { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .controls { background: var(--bg2); padding: 10px 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+  .controls label { font-size: 12px; color: var(--text-muted); }
+  .controls select, .controls input[type="text"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 4px; font-size: 13px; }
+  .controls select:focus, .controls input:focus { outline: none; border-color: var(--accent); }
+  .refresh-info { margin-left: auto; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .refresh-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .refresh-dot.live { background: var(--green); }
+  .refresh-dot.loading { background: var(--yellow); animation: pulse 1s infinite; }
+  .refresh-dot.idle { background: var(--gray); }
+
+  .summary { display: flex; gap: 12px; padding: 12px 24px; flex-wrap: wrap; }
+  .summary-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; min-width: 100px; text-align: center; }
+  .summary-card .num { font-size: 24px; font-weight: 700; }
+  .summary-card .lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .table-container { padding: 0 24px 24px; overflow-x: auto; overflow-y: visible; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+  thead { position: sticky; top: 0; z-index: 10; overflow: visible; }
+  th {
+    background: var(--bg3); color: var(--text); padding: 8px 12px; text-align: left;
+    font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--accent); cursor: pointer; user-select: none;
+    position: relative;
+  }
+  th:hover { background: #1a4a7a; }
+  th .sort-arrow { font-size: 10px; margin-left: 4px; opacity: 0.5; }
+  th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+  /* Drag styling */
+  th.dragging { opacity: 0.4; }
+  th.drag-over { border-left: 3px solid var(--accent); }
+  /* Tooltip */
+  th .col-tooltip {
+    display: none; position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #111; color: var(--text); padding: 8px 12px; border-radius: 4px; font-size: 11px;
+    font-weight: 400; text-transform: none; letter-spacing: normal;
+    white-space: normal; max-width: 280px; min-width: 150px; z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.7); border: 1px solid var(--border);
+    pointer-events: none; line-height: 1.4;
+  }
+  th .col-tooltip::after {
+    content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-bottom-color: #111;
+  }
+  th:hover .col-tooltip { display: block; }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+  tr { transition: background 0.15s; }
+  tr:hover { background: rgba(233,69,96,0.08) !important; }
+  tr.rec-target { background: var(--green-bg); }
+  tr.rec-possible { background: var(--yellow-bg); }
+  tr.rec-avoid { background: var(--red-bg); }
+  tr.rec-low-priority { background: var(--gray-bg); opacity: 0.6; }
+  /* YOU row */
+  tr.you-row { background: var(--you-bg) !important; border-top: 2px solid #7c4dff; border-bottom: 2px solid #7c4dff; }
+  tr.you-row td { font-weight: 600; color: #ce93d8; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .badge-okay { background: #1b5e20; color: #a5d6a7; }
+  .badge-hospital { background: #b71c1c; color: #ef9a9a; }
+  .badge-jail { background: #b71c1c; color: #ef9a9a; }
+  .badge-traveling { background: #0d47a1; color: #90caf9; }
+  .badge-abroad { background: #0d47a1; color: #90caf9; }
+  .badge-fallen { background: #424242; color: #bdbdbd; }
+  .badge-online { background: #1b5e20; color: #a5d6a7; }
+  .badge-idle { background: #f57f17; color: #fff9c4; }
+  .badge-offline { background: #424242; color: #bdbdbd; }
+  .rec-badge { font-weight: 700; font-size: 12px; }
+  .rec-badge-target { color: var(--green); }
+  .rec-badge-possible { color: var(--yellow); }
+  .rec-badge-avoid { color: var(--red); }
+  .rec-badge-low-priority { color: var(--gray); }
+  .you-badge { background: #7c4dff; color: white; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 3px; }
+
+  .attack-btn { display: inline-block; background: var(--accent); color: white; text-decoration: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+  .attack-btn:hover { background: #ff6b81; transform: scale(1.05); }
+  .attack-btn.disabled { background: var(--border); color: var(--text-muted); pointer-events: none; }
+  .player-link { color: var(--blue); text-decoration: none; font-weight: 600; }
+  .player-link:hover { text-decoration: underline; }
+
+  .score-bar { display: inline-flex; align-items: center; gap: 6px; }
+  .score-bar-fill { width: 50px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .score-bar-fill-inner { height: 100%; border-radius: 3px; }
+
+  .loading-msg { text-align: center; padding: 60px; color: var(--text-muted); font-size: 16px; }
+  @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+</style>
+</head>
+<body>
+
+<div class="config-overlay" id="config-overlay">
+  <div class="config-box">
+    <h2>Torn RW Recon</h2>
+    <label>Torn API Key</label>
+    <input type="text" id="cfg-key" value="" placeholder="Your full-access API key">
+    <div class="hint">Full access key from Settings > API Key</div>
+    <label>Enemy Faction ID</label>
+    <input type="text" id="cfg-faction" value="" placeholder="e.g. 44376">
+    <label style="margin-top:16px;display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="cfg-remember" style="width:auto;accent-color:var(--accent);cursor:pointer"> Remember me on this browser
+    </label>
+    <div class="hint">Saves your API key and settings as a cookie so you don't have to re-enter them</div>
+    <button onclick="startRecon()">Start Recon</button>
+    <div id="cfg-error" style="color:var(--red);font-size:13px;margin-top:8px;display:none"></div>
+  </div>
+</div>
+
+<div class="header">
+  <h1>Torn RW Recon <span id="faction-name"></span></h1>
+  <div class="header-stats">
+    <div>Members: <span class="val" id="member-count">0</span></div>
+    <div>Rank: <span class="val" id="faction-rank">—</span></div>
+    <div>Best Chain: <span class="val" id="faction-chain">—</span></div>
+    <div>RW Wins: <span class="val" id="faction-wins">—</span></div>
+  </div>
+  <div class="header-right">
+    <button class="btn-small" id="btn-quick" onclick="doQuickRefresh()"><span class="spinner"></span>Quick Refresh</button>
+    <button class="btn-small" id="btn-full" onclick="showConfig()"><span class="spinner"></span>Full Refresh</button>
+  </div>
+</div>
+
+<div class="progress-container" id="progress-container">
+  <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-bar"></div></div>
+  <div class="progress-text" id="progress-text">Starting...</div>
+</div>
+
+<div class="controls">
+  <div><label>Recommendation</label><br>
+    <select id="filter-rec" onchange="renderBody()">
+      <option value="all">All</option><option value="TARGET">Target</option>
+      <option value="POSSIBLE">Possible</option><option value="AVOID">Avoid</option>
+      <option value="LOW PRIORITY">Low Priority</option>
+    </select>
+  </div>
+  <div><label>Status</label><br>
+    <select id="filter-status" onchange="renderBody()">
+      <option value="all">All</option><option value="Okay">Okay</option>
+      <option value="Hospital">Hospital</option><option value="Traveling">Traveling</option>
+      <option value="Abroad">Abroad</option>
+    </select>
+  </div>
+  <div><label>Activity</label><br>
+    <select id="filter-action" onchange="renderBody()">
+      <option value="all">All</option><option value="Online">Online</option>
+      <option value="Idle">Idle</option><option value="Offline">Offline</option>
+    </select>
+  </div>
+  <div><label>Search</label><br>
+    <input type="text" id="filter-search" placeholder="Player name..." oninput="renderBody()">
+  </div>
+  <div class="refresh-info">
+    <span class="refresh-dot idle" id="refresh-dot"></span>
+    <span id="refresh-text">Not started</span>
+  </div>
+</div>
+
+<div class="summary" id="summary-cards"></div>
+
+<div class="table-container">
+  <table><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
+  <div class="loading-msg" id="loading-msg">Configure your scan to begin.</div>
+</div>
+
+<script>
+let API_KEY = '', FACTION_ID = '', MY_ID = '';
+let myStats = null, myRow = null;
+let members = {};
+let factionData = null;
+let sortCol = 'Target Score', sortAsc = false;
+let refreshTimer = null;
+const API = 'https://api.torn.com';
+const RATE_MS = 650;
+const ALLOWED_FACTION = 9201; // Destination Unknown
+
+// ── Storage helpers (cookie with localStorage fallback for file://) ──
+function saveConfig(data) {
+  const json = JSON.stringify(data);
+  try {
+    const d = new Date(); d.setTime(d.getTime() + 90 * 86400000);
+    document.cookie = `torn_rw_config=${encodeURIComponent(json)};expires=${d.toUTCString()};path=/;SameSite=Strict`;
+  } catch(e) {}
+  try { localStorage.setItem('torn_rw_config', json); } catch(e) {}
+}
+function loadConfig() {
+  // Try cookie first, then localStorage
+  try {
+    const match = document.cookie.match(/(^| )torn_rw_config=([^;]+)/);
+    if (match) return JSON.parse(decodeURIComponent(match[2]));
+  } catch(e) {}
+  try {
+    const ls = localStorage.getItem('torn_rw_config');
+    if (ls) return JSON.parse(ls);
+  } catch(e) {}
+  return null;
+}
+function clearConfig() {
+  try { document.cookie = 'torn_rw_config=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Strict'; } catch(e) {}
+  try { localStorage.removeItem('torn_rw_config'); } catch(e) {}
+}
+
+// Column definitions for tooltips
+const COL_TIPS = {
+  'Action': 'Attack button — click to open an attack on this player in Torn. Disabled if they are in hospital/jail/traveling.',
+  'Recommendation': 'Target recommendation based on comparing your stats vs theirs',
+  'Target Score': 'Numeric score (0-100) — higher = better target for you. Balances winnability with reward per hit.',
+  'Name': 'Player name — click to view their Torn profile',
+  'Level': 'Player level — rough proxy for overall strength',
+  'Status State': 'Current state: Okay (attackable), Hospital, Jail, Traveling, Abroad',
+  'Status Description': 'Detailed status text (e.g. "In hospital for 2h 13m")',
+  'Last Action': 'Online, Idle, or Offline — indicates how quickly they may respond',
+  'Last Action Time': 'Time since last action (e.g. "3 minutes ago")',
+  'Life Maximum': 'Max life points — strong proxy for total battle stats. Higher = stronger.',
+  'Life %': 'Current life as % of max — low % means recently fought or hospitalized',
+  'ELO': 'Torn ELO from ranked fights — direct measure of PvP skill/strength',
+  'Attacks Won': 'Total attacks won — combat experience volume',
+  'Defends Won': 'Total defends won — high count = dangerous to attack',
+  'Best Damage': 'Highest single-hit damage ever dealt — weapon/stat ceiling',
+  'One Hit Kills': 'Number of one-hit KOs — overwhelming stat advantage indicator',
+  'Highest Beaten': 'Highest level player they\'ve beaten — their combat ceiling',
+  'Ranked War Hits': 'Total hits in ranked wars — key RW participation indicator',
+  'Xanax Taken': 'Xanax grants +250 energy. High = very active warrer.',
+  'Energy Drinks Used': 'Energy drinks consumed — another energy source for warring',
+  'Revive Skill': 'Revive skill (0-100) — high skill = faction medic, priority to keep down',
+  'Attacks Stealthed': 'Attacks made in stealth — frequent stealth user if high',
+};
+
+// Draggable column order
+let colOrder = [
+  'Action','Recommendation','Target Score','Name','Level',
+  'Status State','Status Description','Last Action','Last Action Time',
+  'Life Maximum','Life %','ELO',
+  'Attacks Won','Defends Won','Best Damage','One Hit Kills','Highest Beaten',
+  'Ranked War Hits','Xanax Taken','Energy Drinks Used','Revive Skill','Attacks Stealthed',
+];
+let dragSrcIdx = null;
+
+// Load saved config
+const _saved = loadConfig();
+if (_saved) {
+  if (_saved.key) document.getElementById('cfg-key').value = _saved.key;
+  if (_saved.faction) document.getElementById('cfg-faction').value = _saved.faction;
+  if (_saved.colOrder && Array.isArray(_saved.colOrder)) {
+    // Ensure Action column exists (migration from old saved config)
+    if (!_saved.colOrder.includes('Action')) _saved.colOrder.unshift('Action');
+    colOrder = _saved.colOrder;
+  }
+  document.getElementById('cfg-remember').checked = true;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function apiCall(endpoint) {
+  const url = `${API}/${endpoint}&key=${API_KEY}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  if (data.error) throw new Error(`API: ${data.error.error || JSON.stringify(data.error)}`);
+  return data;
+}
+
+// ── Scoring ──
+function scoreTarget(myStats, enemy) {
+  const myLife = myStats.life?.maximum || 1;
+  const myElo = myStats.personalstats?.elo || 1500;
+  const myLevel = myStats.level || 1;
+  const theirLife = enemy['Life Maximum'] || 1;
+  const theirElo = enemy['ELO'] || 1500;
+  const theirLevel = enemy['Level'] || 1;
+  const theirXanax = enemy['Xanax Taken'] || 0;
+  const theirEDrinks = enemy['Energy Drinks Used'] || 0;
+  const theirRWHits = enemy['Ranked War Hits'] || 0;
+  const theirRevive = enemy['Revive Skill'] || 0;
+  const theirDefWon = enemy['Defends Won'] || 0;
+  const theirAtkWon = enemy['Attacks Won'] || 0;
+  const notes = [];
+
+  let winnability = 50;
+  const lifeRatio = theirLife / myLife;
+  if (lifeRatio <= 0.3) winnability += 40;
+  else if (lifeRatio <= 0.5) winnability += 35;
+  else if (lifeRatio <= 0.75) winnability += 25;
+  else if (lifeRatio <= 0.9) winnability += 15;
+  else if (lifeRatio <= 1.0) winnability += 8;
+  else if (lifeRatio <= 1.1) winnability += 0;
+  else if (lifeRatio <= 1.25) winnability -= 10;
+  else if (lifeRatio <= 1.5) winnability -= 25;
+  else if (lifeRatio <= 2.0) winnability -= 35;
+  else winnability -= 45;
+  const eloDiff = theirElo - myElo;
+  if (eloDiff < -300) winnability += 10;
+  else if (eloDiff < -100) winnability += 5;
+  else if (eloDiff <= 100) winnability += 0;
+  else if (eloDiff <= 300) winnability -= 5;
+  else winnability -= 10;
+  winnability = Math.max(0, Math.min(100, winnability));
+
+  let value = 50;
+  if (lifeRatio <= 0.25) { value -= 35; notes.push(`Very low reward — life ${theirLife} far below yours (${myLife})`); }
+  else if (lifeRatio <= 0.4) { value -= 20; notes.push(`Low reward — life ${theirLife} well below yours (${myLife})`); }
+  else if (lifeRatio <= 0.55) { value -= 10; notes.push(`Moderate reward — life ${theirLife} below yours (${myLife})`); }
+  else if (lifeRatio <= 0.75) { value += 5; notes.push(`Good reward — life ${theirLife} somewhat below yours (${myLife})`); }
+  else if (lifeRatio <= 1.0) { value += 20; notes.push(`High reward — life ${theirLife} near yours (${myLife})`); }
+  else if (lifeRatio <= 1.25) { value += 25; notes.push(`Very high reward — life ${theirLife} slightly above yours (${myLife})`); }
+  else if (lifeRatio <= 1.5) { value += 15; notes.push(`High reward if you can win — life ${theirLife} above yours (${myLife})`); }
+  else { value += 5; notes.push(`Max reward but very hard — life ${theirLife} far above yours (${myLife})`); }
+  const levelRatio = theirLevel / Math.max(myLevel, 1);
+  if (levelRatio <= 0.4) { value -= 15; notes.push(`Low level (${theirLevel} vs your ${myLevel}) = minimal RW score`); }
+  else if (levelRatio <= 0.6) value -= 8;
+  else if (levelRatio >= 0.85) value += 5;
+  if (theirRevive >= 50) { value += 10; notes.push(`MEDIC (revive skill ${theirRevive}) — keep them down`); }
+  else if (theirRevive >= 20) { value += 5; notes.push(`Has revive capability (skill ${theirRevive})`); }
+  if (theirXanax >= 500 || theirEDrinks >= 200) { value += 8; notes.push('Active warrer — worth keeping hospitalized'); }
+  else if (theirXanax >= 100 || theirRWHits >= 50) { value += 4; notes.push('Moderately active warrer'); }
+  const isInactive = theirXanax < 10 && theirRWHits < 5 && theirAtkWon < 50;
+  if (isInactive) { value -= 15; notes.push('Likely inactive — low xanax/RW history'); }
+  if (theirDefWon > 5000) { winnability -= 3; notes.push(`Experienced defender (${theirDefWon.toLocaleString()} defends won)`); }
+  value = Math.max(0, Math.min(100, value));
+
+  let score;
+  if (winnability < 30) score = Math.round(winnability * 0.5);
+  else if (winnability < 50) score = Math.round(winnability * 0.6 + value * 0.4);
+  else score = Math.round(winnability * 0.4 + value * 0.6);
+  score = Math.max(0, Math.min(100, score));
+
+  let rec;
+  if (isInactive && winnability >= 50 && value < 35) { rec = 'LOW PRIORITY'; notes.unshift('Easy win but low reward/inactive'); }
+  else if (winnability < 30) { rec = 'AVOID'; notes.unshift('Too strong — high risk of losing'); }
+  else if (score >= 60) { rec = 'TARGET'; if (value >= 60 && winnability >= 60) notes.unshift('BEST VALUE — strong but beatable, high reward per hit'); else if (winnability >= 70) notes.unshift('Reliable win with decent reward'); else notes.unshift('Good target overall'); }
+  else if (score >= 40) { rec = 'POSSIBLE'; if (winnability >= 60) notes.unshift('You can win but reward is modest'); else notes.unshift('Risky but rewarding if you win'); }
+  else { rec = 'AVOID'; if (winnability >= 50) notes.unshift('Easy win but barely worth the energy'); else notes.unshift('Unfavorable matchup'); }
+  return { rec, score, notes: notes.join('; ') };
+}
+
+function buildMemberRow(memberId, factionData, detail) {
+  const fm = factionData.members?.[memberId] || {};
+  const ps = detail.personalstats || {};
+  const life = detail.life || {};
+  const lifePct = life.maximum > 0 ? Math.round(life.current / life.maximum * 1000) / 10 : '';
+  return {
+    'Player ID': parseInt(memberId),
+    'Name': fm.name || detail.name || '',
+    'Level': fm.level || detail.level || 0,
+    'Rank': detail.rank || '',
+    'Status State': fm.status?.state || detail.status?.state || '',
+    'Status Description': fm.status?.description || detail.status?.description || '',
+    'Status Until': fm.status?.until || 0,
+    'Last Action': fm.last_action?.status || detail.last_action?.status || '',
+    'Last Action Time': fm.last_action?.relative || detail.last_action?.relative || '',
+    'Revivable': detail.revivable ? 'Yes' : 'No',
+    'Life Maximum': life.maximum || 0,
+    'Life Current': life.current || 0,
+    'Life %': lifePct,
+    'ELO': ps.elo || 0,
+    'Attacks Won': ps.attackswon || 0,
+    'Attacks Lost': ps.attackslost || 0,
+    'Defends Won': ps.defendswon || 0,
+    'Defends Lost': ps.defendslost || 0,
+    'Best Damage': ps.bestdamage || 0,
+    'One Hit Kills': ps.onehitkills || 0,
+    'Highest Beaten': ps.highestbeaten || 0,
+    'Best Kill Streak': ps.bestkillstreak || 0,
+    'Attack Damage': ps.attackdamage || 0,
+    'Critical Hits': ps.attackcriticalhits || 0,
+    'Attack Hits': ps.attackhits || 0,
+    'Attack Misses': ps.attackmisses || 0,
+    'Ranked War Hits': ps.rankedwarhits || 0,
+    'Ranked War Wins': ps.rankedwarringwins || 0,
+    'Xanax Taken': ps.xantaken || 0,
+    'Energy Drinks Used': ps.energydrinkused || 0,
+    'Energy Refills': ps.refills || 0,
+    'Active Streak': ps.activestreak || 0,
+    'Best Active Streak': ps.bestactivestreak || 0,
+    'Respect for Faction': ps.respectforfaction || 0,
+    'Attacks Stealthed': ps.attacksstealthed || 0,
+    'Retaliations': ps.retals || 0,
+    'Revive Skill': ps.reviveskill || 0,
+    'Revives Given': ps.revives || 0,
+    'Position in Faction': fm.position || '',
+    'Days in Faction': fm.days_in_faction || 0,
+    'Recommendation': '',
+    'Target Score': 0,
+    'Target Notes': '',
+    '_isYou': false,
+  };
+}
+
+function buildMyRow(myStats) {
+  const ps = myStats.personalstats || {};
+  const life = myStats.life || {};
+  const lifePct = life.maximum > 0 ? Math.round(life.current / life.maximum * 1000) / 10 : '';
+  return {
+    'Player ID': myStats.player_id,
+    'Name': myStats.name || 'YOU',
+    'Level': myStats.level || 0,
+    'Rank': myStats.rank || '',
+    'Status State': myStats.status?.state || '',
+    'Status Description': myStats.status?.description || '',
+    'Last Action': myStats.last_action?.status || '',
+    'Last Action Time': myStats.last_action?.relative || '',
+    'Revivable': myStats.revivable ? 'Yes' : 'No',
+    'Life Maximum': life.maximum || 0,
+    'Life Current': life.current || 0,
+    'Life %': lifePct,
+    'ELO': ps.elo || 0,
+    'Attacks Won': ps.attackswon || 0,
+    'Attacks Lost': ps.attackslost || 0,
+    'Defends Won': ps.defendswon || 0,
+    'Defends Lost': ps.defendslost || 0,
+    'Best Damage': ps.bestdamage || 0,
+    'One Hit Kills': ps.onehitkills || 0,
+    'Highest Beaten': ps.highestbeaten || 0,
+    'Best Kill Streak': ps.bestkillstreak || 0,
+    'Attack Damage': ps.attackdamage || 0,
+    'Critical Hits': ps.attackcriticalhits || 0,
+    'Attack Hits': ps.attackhits || 0,
+    'Attack Misses': ps.attackmisses || 0,
+    'Ranked War Hits': ps.rankedwarhits || 0,
+    'Ranked War Wins': ps.rankedwarringwins || 0,
+    'Xanax Taken': ps.xantaken || 0,
+    'Energy Drinks Used': ps.energydrinkused || 0,
+    'Energy Refills': ps.refills || 0,
+    'Active Streak': ps.activestreak || 0,
+    'Best Active Streak': ps.bestactivestreak || 0,
+    'Respect for Faction': ps.respectforfaction || 0,
+    'Attacks Stealthed': ps.attacksstealthed || 0,
+    'Retaliations': ps.retals || 0,
+    'Revive Skill': ps.reviveskill || 0,
+    'Revives Given': ps.revives || 0,
+    'Recommendation': 'YOU',
+    'Target Score': '',
+    'Target Notes': '',
+    '_isYou': true,
+  };
+}
+
+// ── Main recon ──
+async function startRecon() {
+  API_KEY = document.getElementById('cfg-key').value.trim();
+  FACTION_ID = document.getElementById('cfg-faction').value.trim();
+  const remember = document.getElementById('cfg-remember').checked;
+  const errEl = document.getElementById('cfg-error');
+  if (!API_KEY || !FACTION_ID) { errEl.textContent = 'API Key and Faction ID are required.'; errEl.style.display = 'block'; return; }
+
+  errEl.style.display = 'none';
+
+  // ── Faction validation: verify user belongs to Destination Unknown ──
+  let userCheck;
+  try {
+    errEl.style.display = 'none';
+    const startBtn = document.querySelector('.config-box button');
+    startBtn.textContent = 'Verifying...'; startBtn.disabled = true;
+
+    // Check key works and get user info
+    userCheck = await apiCall(`user/?selections=profile,personalstats`);
+
+    // If personalstats is missing or empty, key isn't full access
+    if (!userCheck.personalstats || Object.keys(userCheck.personalstats).length === 0) {
+      errEl.textContent = 'Your API key does not have Full Access. Go to Torn Settings > API Key and generate a key with Full Access.';
+      errEl.style.display = 'block';
+      startBtn.textContent = 'Start Recon'; startBtn.disabled = false;
+      return;
+    }
+
+    const userFaction = userCheck.faction?.faction_id;
+    MY_ID = String(userCheck.player_id);
+
+    if (userFaction !== ALLOWED_FACTION) {
+      const fName = userCheck.faction?.faction_name || 'Unknown';
+      errEl.textContent = `Access denied — this tool is for Destination Unknown members only. You are in "${fName}".`;
+      errEl.style.display = 'block';
+      startBtn.textContent = 'Start Recon'; startBtn.disabled = false;
+      return;
+    }
+
+    startBtn.textContent = 'Start Recon'; startBtn.disabled = false;
+  } catch (e) {
+    errEl.textContent = `Could not verify your identity: ${e.message}`;
+    errEl.style.display = 'block';
+    const startBtn = document.querySelector('.config-box button');
+    startBtn.textContent = 'Start Recon'; startBtn.disabled = false;
+    return;
+  }
+
+  // Save or clear config
+  if (remember) {
+    saveConfig({ key: API_KEY, faction: FACTION_ID, colOrder });
+  } else {
+    clearConfig();
+  }
+
+  document.getElementById('config-overlay').classList.add('hidden');
+  members = {}; myRow = null;
+  renderBody(); renderSummary();
+  setDot('loading', 'Loading...');
+  const pc = document.getElementById('progress-container');
+  pc.classList.add('active');
+
+  try {
+    // Use the stats we already fetched during validation (saves an API call)
+    myStats = userCheck;
+    myRow = buildMyRow(myStats);
+
+    updateProgress(0, 0, 'Fetching faction info...');
+    factionData = await apiCall(`faction/${FACTION_ID}?selections=basic`);
+    const memberIds = Object.keys(factionData.members || {});
+    const total = memberIds.length;
+
+    document.getElementById('faction-name').textContent = `— ${factionData.name} [${factionData.tag || ''}]`;
+    document.getElementById('member-count').textContent = total;
+    document.getElementById('faction-rank').textContent = `${factionData.rank?.name || '?'} (Lv ${factionData.rank?.level || '?'})`;
+    document.getElementById('faction-chain').textContent = (factionData.best_chain || 0).toLocaleString();
+    document.getElementById('faction-wins').textContent = factionData.rank?.wins || '—';
+    await sleep(RATE_MS);
+
+    for (let i = 0; i < memberIds.length; i++) {
+      const mid = memberIds[i];
+      const name = factionData.members[mid]?.name || mid;
+      updateProgress(i + 1, total, `Fetching ${name} (${i + 1}/${total})...`);
+      try {
+        const detail = await apiCall(`user/${mid}?selections=profile,personalstats`);
+        const row = buildMemberRow(mid, factionData, detail);
+        if (myStats) { const { rec, score, notes } = scoreTarget(myStats, row); row['Recommendation'] = rec; row['Target Score'] = score; row['Target Notes'] = notes; }
+        members[mid] = row;
+      } catch (e) { console.warn(`Error fetching ${name}:`, e); }
+      if ((i + 1) % 5 === 0 || i === memberIds.length - 1) { document.getElementById('member-count').textContent = Object.keys(members).length; renderBody(); renderSummary(); }
+      if (i < memberIds.length - 1) await sleep(RATE_MS);
+    }
+
+    pc.classList.remove('active');
+    setDot('live', `Loaded ${Object.keys(members).length} members — auto-refreshing every 30s`);
+    renderHead(); renderBody(); renderSummary();
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(doQuickRefresh, 30000);
+  } catch (e) {
+    pc.classList.remove('active');
+    setDot('idle', `Error: ${e.message}`);
+    document.getElementById('loading-msg').textContent = `Error: ${e.message}`;
+    document.getElementById('loading-msg').style.display = 'block';
+  }
+}
+
+async function doQuickRefresh() {
+  if (!API_KEY || !FACTION_ID) return;
+  const btn = document.getElementById('btn-quick');
+  btn.classList.add('loading'); btn.disabled = true;
+  setDot('loading', 'Quick refreshing...');
+  try {
+    const data = await apiCall(`faction/${FACTION_ID}?selections=basic`);
+    factionData = data;
+    let changes = 0;
+    for (const [mid, fm] of Object.entries(data.members || {})) {
+      if (!members[mid]) continue;
+      const old = members[mid];
+      const newState = fm.status?.state || '';
+      const newAction = fm.last_action?.status || '';
+      if (old['Status State'] !== newState || old['Last Action'] !== newAction || old['Status Description'] !== (fm.status?.description || '')) {
+        old['Status State'] = newState;
+        old['Status Description'] = fm.status?.description || '';
+        old['Status Until'] = fm.status?.until || 0;
+        old['Last Action'] = newAction;
+        old['Last Action Time'] = fm.last_action?.relative || '';
+        changes++;
+      }
+    }
+    renderBody(); renderSummary();
+    const now = new Date().toLocaleTimeString();
+    setDot('live', `Updated ${now} — ${changes} change${changes !== 1 ? 's' : ''}`);
+  } catch (e) { setDot('idle', `Refresh error: ${e.message}`); }
+  btn.classList.remove('loading'); btn.disabled = false;
+}
+
+// ── Rendering ──
+function fmtNum(n) {
+  if (n === '' || n === null || n === undefined) return '—';
+  if (typeof n === 'number') return n.toLocaleString();
+  return n;
+}
+
+function renderHead() {
+  let html = '<tr>';
+  for (let i = 0; i < colOrder.length; i++) {
+    const col = colOrder[i];
+    const tip = COL_TIPS[col] || col;
+    if (col === 'Action') {
+      html += `<th draggable="true" data-col-idx="${i}" ondragstart="onDragStart(event)" ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" ondragend="onDragEnd(event)">Action<div class="col-tooltip">${tip}</div></th>`;
+    } else {
+      const arrow = col === sortCol ? (sortAsc ? '&#9650;' : '&#9660;') : '&#8597;';
+      const cls = col === sortCol ? 'sorted' : '';
+      html += `<th class="${cls}" draggable="true" data-col-idx="${i}" onclick="doSort('${col}')" ondragstart="onDragStart(event)" ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" ondragend="onDragEnd(event)">${col}<span class="sort-arrow">${arrow}</span><div class="col-tooltip">${tip}</div></th>`;
+    }
+  }
+  html += '</tr>';
+  document.getElementById('table-head').innerHTML = html;
+}
+
+function renderRow(row, isYou) {
+  const id = row['Player ID'];
+  const rec = (row['Recommendation'] || '').toLowerCase().replace(/ /g, '-');
+  const rowClass = isYou ? 'you-row' : `rec-${rec}`;
+  let html = `<tr class="${rowClass}">`;
+
+  for (const col of colOrder) {
+    const v = row[col];
+    if (col === 'Action') {
+      if (isYou) { html += `<td>—</td>`; }
+      else {
+        const canAttack = row['Status State'] === 'Okay';
+        if (canAttack) html += `<td><a class="attack-btn" href="https://www.torn.com/loader.php?sid=attack&user2ID=${id}" target="_blank">Attack</a></td>`;
+        else html += `<td><span class="attack-btn disabled">${row['Status State'] || '—'}</span></td>`;
+      }
+    } else if (col === 'Recommendation') {
+      if (isYou) html += `<td><span class="you-badge">YOU</span></td>`;
+      else html += `<td><span class="rec-badge rec-badge-${rec}">${v}</span></td>`;
+    } else if (col === 'Target Score') {
+      if (isYou) { html += `<td>—</td>`; }
+      else { const color = v >= 60 ? '#4caf50' : v >= 40 ? '#ffc107' : '#ef5350'; html += `<td><div class="score-bar"><span>${v}</span><div class="score-bar-fill"><div class="score-bar-fill-inner" style="width:${v}%;background:${color}"></div></div></div></td>`; }
+    } else if (col === 'Name') {
+      html += `<td><a class="player-link" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${v}</a></td>`;
+    } else if (col === 'Status State') {
+      html += `<td><span class="badge badge-${(v||'').toLowerCase()}">${v}</span></td>`;
+    } else if (col === 'Last Action') {
+      html += `<td><span class="badge badge-${(v||'').toLowerCase()}">${v}</span></td>`;
+    } else if (col === 'Life %') {
+      html += `<td>${v !== '' ? v + '%' : '—'}</td>`;
+    } else {
+      html += `<td>${fmtNum(v)}</td>`;
+    }
+  }
+  html += '</tr>';
+  return html;
+}
+
+function renderBody() {
+  let rows = Object.values(members);
+
+  const rf = document.getElementById('filter-rec').value;
+  const sf = document.getElementById('filter-status').value;
+  const af = document.getElementById('filter-action').value;
+  const search = document.getElementById('filter-search').value.toLowerCase();
+  if (rf !== 'all') rows = rows.filter(r => r['Recommendation'] === rf);
+  if (sf !== 'all') rows = rows.filter(r => r['Status State'] === sf);
+  if (af !== 'all') rows = rows.filter(r => r['Last Action'] === af);
+  if (search) rows = rows.filter(r => (r['Name'] || '').toLowerCase().includes(search));
+
+  rows.sort((a, b) => {
+    let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
+    if (typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
+    va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+    return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  let html = '';
+  let youInserted = false;
+  const showYou = myRow && rf === 'all' && !search;
+
+  for (const row of rows) {
+    // Insert YOU row between TARGET and POSSIBLE groups
+    if (showYou && !youInserted && row['Recommendation'] !== 'TARGET') {
+      html += renderRow(myRow, true);
+      youInserted = true;
+    }
+    html += renderRow(row, false);
+  }
+  // If all rows are TARGET or no rows, append YOU at end
+  if (showYou && !youInserted) html += renderRow(myRow, true);
+
+  document.getElementById('table-body').innerHTML = html;
+  document.getElementById('loading-msg').style.display = (rows.length > 0 || (showYou)) ? 'none' : 'block';
+  if (rows.length === 0 && Object.keys(members).length > 0) {
+    document.getElementById('loading-msg').textContent = 'No members match filters.';
+  }
+}
+
+function renderSummary() {
+  const rows = Object.values(members);
+  const c = { TARGET: 0, POSSIBLE: 0, AVOID: 0, 'LOW PRIORITY': 0 };
+  const s = { Okay: 0, Hospital: 0 };
+  const a = { Online: 0, Idle: 0 };
+  for (const r of rows) {
+    const rec = r['Recommendation']; if (rec in c) c[rec]++;
+    const st = r['Status State']; if (st === 'Hospital') s.Hospital++; else if (st === 'Okay') s.Okay++;
+    const act = r['Last Action']; if (act === 'Online') a.Online++; else if (act === 'Idle') a.Idle++;
+  }
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="summary-card"><div class="num" style="color:var(--green)">${c.TARGET}</div><div class="lbl">Targets</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--yellow)">${c.POSSIBLE}</div><div class="lbl">Possible</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--red)">${c.AVOID}</div><div class="lbl">Avoid</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--gray)">${c['LOW PRIORITY']}</div><div class="lbl">Low Pri</div></div>
+    <div class="summary-card"><div class="num">${rows.length}</div><div class="lbl">Total</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--green)">${a.Online}</div><div class="lbl">Online</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--yellow)">${a.Idle}</div><div class="lbl">Idle</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--red)">${s.Hospital}</div><div class="lbl">Hospital</div></div>
+  `;
+}
+
+// ── Column drag & drop ──
+function onDragStart(e) {
+  dragSrcIdx = parseInt(e.target.dataset.colIdx);
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function onDragEnter(e) { e.preventDefault(); const th = e.target.closest('th'); if (th) th.classList.add('drag-over'); }
+function onDragLeave(e) { const th = e.target.closest('th'); if (th) th.classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  const th = e.target.closest('th');
+  if (!th) return;
+  th.classList.remove('drag-over');
+  const destIdx = parseInt(th.dataset.colIdx);
+  if (dragSrcIdx === null || dragSrcIdx === destIdx || isNaN(destIdx)) return;
+  const moved = colOrder.splice(dragSrcIdx, 1)[0];
+  colOrder.splice(destIdx, 0, moved);
+  if (document.getElementById('cfg-remember').checked) {
+    saveConfig({ key: API_KEY, faction: FACTION_ID, colOrder });
+  }
+  renderHead(); renderBody();
+}
+function onDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('th.drag-over').forEach(th => th.classList.remove('drag-over'));
+  dragSrcIdx = null;
+}
+
+function doSort(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = false; }
+  renderHead(); renderBody();
+}
+
+function updateProgress(loaded, total, text) {
+  const pct = total > 0 ? (loaded / total * 100) : 0;
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = text;
+}
+
+function setDot(state, text) {
+  document.getElementById('refresh-dot').className = 'refresh-dot ' + state;
+  document.getElementById('refresh-text').textContent = text;
+}
+
+function showConfig() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  document.getElementById('config-overlay').classList.remove('hidden');
+}
+
+renderHead();
+</script>
+</body>
+</html>
