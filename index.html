@@ -142,17 +142,32 @@
   .loading-msg { text-align: center; padding: 60px; color: var(--text-muted); font-size: 16px; }
   @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
 
-  /* Flashing hospital badge (under 3 min) */
+  /* Flashing hospital badge — 3 tiers based on time remaining */
   @keyframes flash-hosp {
     0%, 100% { background: #b71c1c; color: #ef9a9a; }
     50% { background: #ff5252; color: #fff; }
   }
-  .badge-hospital.flash {
-    animation: flash-hosp 0.6s ease-in-out infinite;
+  @keyframes flash-hosp-urgent {
+    0%, 100% { background: #d50000; color: #ffcdd2; }
+    50% { background: #ff1744; color: #fff; box-shadow: 0 0 12px rgba(255,23,68,0.8); }
+  }
+  /* Slow flash: 1-3 min remaining */
+  .badge-hospital.flash-slow, .hosp-countdown.flash-slow {
+    animation: flash-hosp 0.8s ease-in-out infinite;
     font-weight: 800;
   }
-  .hosp-countdown.flash {
-    animation: flash-hosp 0.6s ease-in-out infinite;
+  /* Fast flash: 30s-1min remaining */
+  .badge-hospital.flash-fast, .hosp-countdown.flash-fast {
+    animation: flash-hosp 0.4s ease-in-out infinite;
+    font-weight: 800;
+  }
+  /* Urgent flash: under 30s — about to pop out */
+  .badge-hospital.flash-urgent, .hosp-countdown.flash-urgent {
+    animation: flash-hosp-urgent 0.2s ease-in-out infinite;
+    font-weight: 800;
+    box-shadow: 0 0 8px rgba(255,23,68,0.6);
+  }
+  .hosp-countdown.flash-slow, .hosp-countdown.flash-fast, .hosp-countdown.flash-urgent {
     padding: 2px 6px;
     border-radius: 3px;
   }
@@ -641,6 +656,7 @@ async function doQuickRefresh() {
   btn.classList.add('loading'); btn.disabled = true;
   setDot('loading', 'Quick refreshing...');
   try {
+    // Refresh enemy faction statuses
     const data = await apiCall(`faction/${FACTION_ID}?selections=basic`);
     factionData = data;
     let changes = 0;
@@ -658,6 +674,17 @@ async function doQuickRefresh() {
         changes++;
       }
     }
+    // Refresh your own status
+    try {
+      const me = await apiCall(`user/?selections=profile`);
+      if (myRow) {
+        myRow['Status State'] = me.status?.state || '';
+        myRow['Status Description'] = me.status?.description || '';
+        myRow['Status Until'] = me.status?.until || 0;
+        myRow['Last Action'] = me.last_action?.status || '';
+        myRow['Last Action Time'] = me.last_action?.relative || '';
+      }
+    } catch (e) { console.warn('Could not refresh your status:', e); }
     renderBody(); renderSummary();
     const now = new Date().toLocaleTimeString();
     setDot('live', `Updated ${now} — ${changes} change${changes !== 1 ? 's' : ''}`);
@@ -716,7 +743,9 @@ function renderRow(row, isYou) {
       let flash = '';
       if (v === 'Hospital' && row['Status Until']) {
         const secsLeft = row['Status Until'] - Date.now() / 1000;
-        if (secsLeft > 0 && secsLeft < 180) flash = ' flash';
+        if (secsLeft > 0 && secsLeft <= 30) flash = ' flash-urgent';
+        else if (secsLeft > 0 && secsLeft <= 60) flash = ' flash-fast';
+        else if (secsLeft > 0 && secsLeft < 180) flash = ' flash-slow';
       }
       html += `<td><span class="badge badge-${(v||'').toLowerCase()}${flash}">${v}</span></td>`;
     } else if (col === 'Status Description') {
@@ -725,7 +754,10 @@ function renderRow(row, isYou) {
         if (secsLeft > 0 && secsLeft < 180) {
           const m = Math.floor(secsLeft / 60);
           const s = Math.floor(secsLeft % 60);
-          html += `<td><span class="hosp-countdown flash">${m}m ${s}s</span></td>`;
+          let tier = 'flash-slow';
+          if (secsLeft <= 30) tier = 'flash-urgent';
+          else if (secsLeft <= 60) tier = 'flash-fast';
+          html += `<td><span class="hosp-countdown ${tier}">${m}m ${String(s).padStart(2,'0')}s</span></td>`;
           continue;
         }
       }
@@ -869,10 +901,10 @@ function showConfig() {
 
 renderHead();
 
-// Re-render every 5s to update hospital countdown flashing
+// Re-render every 1s to keep hospital countdowns accurate
 setInterval(() => {
   if (Object.keys(members).length > 0) renderBody();
-}, 5000);
+}, 1000);
 </script>
 
 <div class="app-footer">Torn RW Recon v1.1.0</div>
