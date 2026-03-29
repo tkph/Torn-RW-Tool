@@ -141,6 +141,44 @@
 
   .loading-msg { text-align: center; padding: 60px; color: var(--text-muted); font-size: 16px; }
   @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+  /* Flashing hospital badge (under 3 min) */
+  @keyframes flash-hosp {
+    0%, 100% { background: #b71c1c; color: #ef9a9a; }
+    50% { background: #ff5252; color: #fff; }
+  }
+  .badge-hospital.flash {
+    animation: flash-hosp 0.6s ease-in-out infinite;
+    font-weight: 800;
+  }
+  .hosp-countdown.flash {
+    animation: flash-hosp 0.6s ease-in-out infinite;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  /* Revivable flag */
+  .revive-flag {
+    display: inline-block;
+    background: #e65100;
+    color: #ffe0b2;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Footer */
+  .app-footer {
+    text-align: center;
+    padding: 16px 24px;
+    color: var(--text-muted);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    margin-top: 24px;
+  }
 </style>
 </head>
 <body>
@@ -278,6 +316,7 @@ const COL_TIPS = {
   'Xanax Taken': 'Xanax grants +250 energy. High = very active warrer.',
   'Energy Drinks Used': 'Energy drinks consumed — another energy source for warring',
   'Revive Skill': 'Revive skill (0-100) — high skill = faction medic, priority to keep down',
+  'Revivable': 'Whether this player can be revived — "Yes" means allies can bring them back to fight again quickly',
   'Attacks Stealthed': 'Attacks made in stealth — frequent stealth user if high',
 };
 
@@ -287,7 +326,7 @@ let colOrder = [
   'Status State','Status Description','Last Action','Last Action Time',
   'Life Maximum','Life %','ELO',
   'Attacks Won','Defends Won','Best Damage','One Hit Kills','Highest Beaten',
-  'Ranked War Hits','Xanax Taken','Energy Drinks Used','Revive Skill','Attacks Stealthed',
+  'Ranked War Hits','Xanax Taken','Energy Drinks Used','Revive Skill','Revivable','Attacks Stealthed',
 ];
 let dragSrcIdx = null;
 
@@ -674,11 +713,30 @@ function renderRow(row, isYou) {
     } else if (col === 'Name') {
       html += `<td><a class="player-link" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${v}</a></td>`;
     } else if (col === 'Status State') {
-      html += `<td><span class="badge badge-${(v||'').toLowerCase()}">${v}</span></td>`;
+      let flash = '';
+      if (v === 'Hospital' && row['Status Until']) {
+        const secsLeft = row['Status Until'] - Date.now() / 1000;
+        if (secsLeft > 0 && secsLeft < 180) flash = ' flash';
+      }
+      html += `<td><span class="badge badge-${(v||'').toLowerCase()}${flash}">${v}</span></td>`;
+    } else if (col === 'Status Description') {
+      if (row['Status State'] === 'Hospital' && row['Status Until']) {
+        const secsLeft = row['Status Until'] - Date.now() / 1000;
+        if (secsLeft > 0 && secsLeft < 180) {
+          const m = Math.floor(secsLeft / 60);
+          const s = Math.floor(secsLeft % 60);
+          html += `<td><span class="hosp-countdown flash">${m}m ${s}s</span></td>`;
+          continue;
+        }
+      }
+      html += `<td>${fmtNum(v)}</td>`;
     } else if (col === 'Last Action') {
       html += `<td><span class="badge badge-${(v||'').toLowerCase()}">${v}</span></td>`;
     } else if (col === 'Life %') {
       html += `<td>${v !== '' ? v + '%' : '—'}</td>`;
+    } else if (col === 'Revivable') {
+      if (v === 'Yes') html += `<td><span class="revive-flag">Revivable</span></td>`;
+      else html += `<td><span style="color:var(--text-muted)">No</span></td>`;
     } else {
       html += `<td>${fmtNum(v)}</td>`;
     }
@@ -699,7 +757,15 @@ function renderBody() {
   if (af !== 'all') rows = rows.filter(r => r['Last Action'] === af);
   if (search) rows = rows.filter(r => (r['Name'] || '').toLowerCase().includes(search));
 
+  // Sort: recommendation tier first, then Okay (attackable) elevated, then user-selected column
+  const REC_ORDER = { 'TARGET': 0, 'POSSIBLE': 1, 'AVOID': 2, 'LOW PRIORITY': 3 };
   rows.sort((a, b) => {
+    const ra = REC_ORDER[a['Recommendation']] ?? 4;
+    const rb = REC_ORDER[b['Recommendation']] ?? 4;
+    if (ra !== rb) return ra - rb;
+    const aOk = a['Status State'] === 'Okay' ? 0 : 1;
+    const bOk = b['Status State'] === 'Okay' ? 0 : 1;
+    if (aOk !== bOk) return aOk - bOk;
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     if (typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
     va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
@@ -802,6 +868,14 @@ function showConfig() {
 }
 
 renderHead();
+
+// Re-render every 5s to update hospital countdown flashing
+setInterval(() => {
+  if (Object.keys(members).length > 0) renderBody();
+}, 5000);
 </script>
+
+<div class="app-footer">Torn RW Recon v1.1.0</div>
+
 </body>
 </html>
