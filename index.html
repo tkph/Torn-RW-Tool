@@ -727,7 +727,8 @@ function renderRow(row, isYou) {
     if (col === 'Action') {
       if (isYou) { html += `<td>—</td>`; }
       else {
-        const canAttack = row['Status State'] === 'Okay';
+        const hospOut = row['Status State'] === 'Hospital' && row['Status Until'] && row['Status Until'] - Date.now() / 1000 <= 0;
+        const canAttack = row['Status State'] === 'Okay' || hospOut;
         if (canAttack) html += `<td><a class="attack-btn" href="https://www.torn.com/loader.php?sid=attack&user2ID=${id}" target="_blank">Attack</a></td>`;
         else html += `<td><span class="attack-btn disabled">${row['Status State'] || '—'}</span></td>`;
       }
@@ -802,8 +803,10 @@ function renderBody() {
     const ra = REC_ORDER[a['Recommendation']] ?? 4;
     const rb = REC_ORDER[b['Recommendation']] ?? 4;
     if (ra !== rb) return ra - rb;
-    const aOk = a['Status State'] === 'Okay' ? 0 : 1;
-    const bOk = b['Status State'] === 'Okay' ? 0 : 1;
+    const aOut = a['Status State'] === 'Hospital' && a['Status Until'] && a['Status Until'] - Date.now() / 1000 <= 0;
+    const bOut = b['Status State'] === 'Hospital' && b['Status Until'] && b['Status Until'] - Date.now() / 1000 <= 0;
+    const aOk = (a['Status State'] === 'Okay' || aOut) ? 0 : 1;
+    const bOk = (b['Status State'] === 'Okay' || bOut) ? 0 : 1;
     if (aOk !== bOk) return aOk - bOk;
     let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
     if (typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
@@ -914,7 +917,7 @@ setInterval(() => {
 }, 1000);
 </script>
 
-<div class="app-footer">Torn RW Recon v1.2.1</div>
+<div class="app-footer">Torn RW Recon v1.2.2</div>
 
 </body>
 </html>
