@@ -102,7 +102,7 @@
   }
   th:hover .col-tooltip { display: block; }
   td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
-  tr { transition: background 0.15s; }
+  tr { }
   tr:hover { background: rgba(233,69,96,0.08) !important; }
   tr.rec-target { background: var(--green-bg); }
   tr.rec-possible { background: var(--yellow-bg); }
@@ -743,21 +743,28 @@ function renderRow(row, isYou) {
       let flash = '';
       if (v === 'Hospital' && row['Status Until']) {
         const secsLeft = row['Status Until'] - Date.now() / 1000;
-        if (secsLeft > 0 && secsLeft <= 30) flash = ' flash-urgent';
-        else if (secsLeft > 0 && secsLeft <= 60) flash = ' flash-fast';
-        else if (secsLeft > 0 && secsLeft < 180) flash = ' flash-slow';
+        if (secsLeft <= 0) flash = ' flash-urgent';
+        else if (secsLeft <= 30) flash = ' flash-urgent';
+        else if (secsLeft <= 60) flash = ' flash-fast';
+        else if (secsLeft < 180) flash = ' flash-slow';
       }
       html += `<td><span class="badge badge-${(v||'').toLowerCase()}${flash}">${v}</span></td>`;
     } else if (col === 'Status Description') {
       if (row['Status State'] === 'Hospital' && row['Status Until']) {
         const secsLeft = row['Status Until'] - Date.now() / 1000;
-        if (secsLeft > 0 && secsLeft < 180) {
-          const m = Math.floor(secsLeft / 60);
-          const s = Math.floor(secsLeft % 60);
-          let tier = 'flash-slow';
-          if (secsLeft <= 30) tier = 'flash-urgent';
-          else if (secsLeft <= 60) tier = 'flash-fast';
-          html += `<td><span class="hosp-countdown ${tier}">${m}m ${String(s).padStart(2,'0')}s</span></td>`;
+        if (secsLeft < 180) {
+          let tier = 'flash-urgent';
+          let label;
+          if (secsLeft <= 0) {
+            label = 'OUT NOW';
+          } else {
+            const m = Math.floor(secsLeft / 60);
+            const s = Math.floor(secsLeft % 60);
+            label = `${m}m ${String(s).padStart(2,'0')}s`;
+            if (secsLeft > 60) tier = 'flash-slow';
+            else if (secsLeft > 30) tier = 'flash-fast';
+          }
+          html += `<td><span class="hosp-countdown ${tier}">${label}</span></td>`;
           continue;
         }
       }
@@ -907,7 +914,7 @@ setInterval(() => {
 }, 1000);
 </script>
 
-<div class="app-footer">Torn RW Recon v1.2.0</div>
+<div class="app-footer">Torn RW Recon v1.2.1</div>
 
 </body>
 </html>
