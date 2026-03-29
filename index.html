@@ -351,8 +351,12 @@ if (_saved) {
   if (_saved.key) document.getElementById('cfg-key').value = _saved.key;
   if (_saved.faction) document.getElementById('cfg-faction').value = _saved.faction;
   if (_saved.colOrder && Array.isArray(_saved.colOrder)) {
-    // Ensure Action column exists (migration from old saved config)
+    // Ensure new columns exist (migration from old saved config)
     if (!_saved.colOrder.includes('Action')) _saved.colOrder.unshift('Action');
+    if (!_saved.colOrder.includes('Revivable')) {
+      const idx = _saved.colOrder.indexOf('Revive Skill');
+      _saved.colOrder.splice(idx >= 0 ? idx + 1 : _saved.colOrder.length, 0, 'Revivable');
+    }
     colOrder = _saved.colOrder;
   }
   document.getElementById('cfg-remember').checked = true;
@@ -917,7 +921,7 @@ setInterval(() => {
 }, 1000);
 </script>
 
-<div class="app-footer">Torn RW Recon v1.2.2</div>
+<div class="app-footer">Torn RW Recon v1.2.3</div>
 
 </body>
 </html>
